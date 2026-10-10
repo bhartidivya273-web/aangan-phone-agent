@@ -38,15 +38,13 @@ async function handle(req: Request, input: Record<string, unknown>) {
     },
     calIfConfigured(cfg),
   ).catch(() => null);
-  if (slots === null) return NextResponse.json({ ok: false, error: "calendar unavailable", slots: [], instruction: "Say a designer will follow up to arrange a time." });
-  return NextResponse.json({
-    ok: true,
-    consultation: cfg.booking.mode,
-    slots: slots.map((s) => ({ start: s.start, say: s.label })),
-    instruction: slots.length
-      ? "Offer at most two or three of these. Read the 'say' text exactly. To book, pass the exact 'start' value."
-      : "No slot matches. Say a designer will follow up to arrange a time.",
-  });
+  if (slots === null) return NextResponse.json({ ok: false, error: "calendar unavailable", slots: [], instruction: "Say a designer will follow up to arrange a time.", data: { slots: [], message: "The calendar is unavailable. Say a designer will follow up to arrange a time." } });
+  const list = slots.map((s) => ({ start: s.start, say: s.label }));
+  const message = slots.length
+    ? "Offer at most two or three of these. Read the 'say' text exactly. To book, pass the exact 'start' value."
+    : "No slot matches. Say a designer will follow up to arrange a time.";
+  // `data` mirrors the top level: Vaani's "Store fields as variables" defaults read data.slots and data.message
+  return NextResponse.json({ ok: true, consultation: cfg.booking.mode, slots: list, instruction: message, data: { slots: list, message } });
 }
 
 export async function GET(req: Request) {

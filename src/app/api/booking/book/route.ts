@@ -28,11 +28,10 @@ export async function POST(req: Request) {
     { start: str("start") ?? "", name: str("name"), phone: str("phone"), notes: str("notes") },
     { store: deps.store, cfg, notifier: deps.notifier, designersChatId: deps.chats.designers || undefined, cal: calIfConfigured(cfg) },
   );
-  if (!r.ok) return NextResponse.json({ ok: false, reason: r.reason, message: r.message, alternatives: r.alternatives.map((s) => ({ start: s.start, say: s.label })) });
-  return NextResponse.json({
-    ok: true,
-    booked: r.label,
-    consultation: r.mode,
-    instruction: `Tell the caller the consultation is booked for ${r.label}, as a ${r.mode} with a designer. Say it once.`,
-  });
+  if (!r.ok) {
+    const alternatives = r.alternatives.map((s) => ({ start: s.start, say: s.label }));
+    return NextResponse.json({ ok: false, reason: r.reason, message: r.message, alternatives, data: { slots: alternatives, message: r.message } });
+  }
+  const message = `Tell the caller the consultation is booked for ${r.label}, as a ${r.mode} with a designer. Say it once.`;
+  return NextResponse.json({ ok: true, booked: r.label, consultation: r.mode, instruction: message, data: { booked: r.label, message } });
 }

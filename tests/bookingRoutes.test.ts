@@ -26,6 +26,15 @@ describe("booking tool endpoints (called by the voice assistant)", () => {
     expect(j.slots[0]).toMatchObject({ say: expect.stringMatching(/^(Tuesday|Thursday), \d+ \w+ at \d+:\d\d (am|pm)$/), start: expect.stringMatching(/Z$/) });
     expect(j.consultation).toBe("phone or video call");
   });
+  it("responses also carry a `data` object (data.slots, data.message) matching Vaani's default variable mapping", async () => {
+    const { GET } = await import("../src/app/api/booking/slots/route");
+    const { POST } = await import("../src/app/api/booking/book/route");
+    const j = await (await GET(get("limit=2"))).json();
+    expect(j.data.slots).toEqual(j.slots);
+    expect(typeof j.data.message).toBe("string");
+    const bad = await (await POST(post(JSON.stringify({ start: "nonsense", name: "X" })))).json();
+    expect(bad.data.message).toMatch(/./);
+  });
   it("slots also answers POST (how Vaani sends tool parameters), with the secret in a header", async () => {
     const { POST } = await import("../src/app/api/booking/slots/route");
     const req = (body: string, headers: Record<string, string>) => new Request("http://x/api/booking/slots", { method: "POST", headers, body });
