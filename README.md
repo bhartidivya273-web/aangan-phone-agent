@@ -6,6 +6,12 @@ against the founder's rubric, books a consultation, and puts the lead in front o
 
 **Live dashboard (auto-deployed from this repo by Vercel):** https://aangan-phone-agent-wine.vercel.app/dashboard (public view: no names, phone numbers or transcripts)
 
+## Components map
+
+![Components map](docs/components-map.svg)
+
+Same format as the case's Components Map: Trigger → Input → Context → Processing → AI → Output, with the human Review gate dashed. ([open full size](docs/components-map.svg))
+
 ## The flow
 
 ```
