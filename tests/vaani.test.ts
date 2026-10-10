@@ -42,7 +42,7 @@ describe("Vaani adapter: webhook parsing", () => {
     expect(ev.report.endedAt).toBe("2026-10-09T09:16:00.000Z");
     expect(ev.report.startedAt).toBe("2026-10-09T09:11:00.000Z");
   });
-  it.each(["call_started", "call_ended", "user_picked_up_at", "human_transfer_initiated", "call_no_answer"])("ignores %s", (event) => {
+  it.each(["call_ended", "human_transfer_initiated", "call_no_answer", "call_ringing"])("ignores %s", (event) => {
     expect(a.parse({ event, room_name: "r" })[0].type).toBe("ignored");
   });
   it("rejects garbage", () => {
@@ -124,7 +124,7 @@ describe("Vaani call through the whole pipeline", () => {
   it("other Vaani events are ignored without touching the database", async () => {
     const a = createVaaniAdapter();
     const { d, store } = deps({ llm: fakeLLM(cls()) });
-    const r = await handleVoiceEvents(a.parse({ event: "call_started", room_name: "r", phone_number: "+91" }), "vaani", d);
+    const r = await handleVoiceEvents(a.parse({ event: "call_ended", room_name: "r", call_duration: 3 }), "vaani", d);
     expect(r[0].status).toBe("ignored");
     expect(store.calls).toHaveLength(0);
   });
@@ -180,5 +180,39 @@ describe("generated Vaani agent prompt", () => {
     expect(p).toContain("Pune city");
     expect(p).toContain("five criteria");
     expect(p).toContain("repeat_caller");
+  });
+});
+
+describe("caller number from in-progress events (Vaani's call-history API is unreliable for some accounts)", () => {
+  const a = createVaaniAdapter();
+  it("call_started and user_picked_up_at become session events keyed by room name; other room events stay ignored", () => {
+    expect(a.parse({ event: "call_started", room_name: "r1", status: "dialing", phone_number: "+919999900555" })[0]).toMatchObject({ type: "session", session: { providerCallId: "r1", callerPhone: "+919999900555" } });
+    expect(a.parse({ event: "user_picked_up_at", room_name: "r1", status: "active" })[0]).toMatchObject({ type: "session", session: { providerCallId: "r1" } });
+    expect(a.parse({ event: "call_ended", room_name: "r1", call_duration: 4 })[0].type).toBe("ignored");
+    expect(a.parse({ event: "human_transfer_initiated", room_name: "r1", phone_number: "+910000000000" })[0].type).toBe("ignored"); // a transfer number is not the caller
+  });
+  it("the number stored at call start is attached to the finished call, so the lead has its phone even with no history lookup", async () => {
+    const { d, store, notifier } = deps({ llm: fakeLLM(cls()) });
+    const run = (body: object) => handleVoiceEvents(a.parse(body), "vaani", d, a.enrich!.bind(a));
+    const s1 = await run({ event: "call_started", room_name: "inbound-sess-1", phone_number: "+919999900555" });
+    expect(s1[0]).toMatchObject({ status: "logged" });
+    expect(store.calls).toHaveLength(0); // a session event never creates a call
+    await run({ event: "user_picked_up_at", room_name: "inbound-sess-1" });
+    const r = await run(post({ call_id: "inbound-sess-1", data: { ...post().data, call_id: "inbound-sess-1", room_name: "inbound-sess-1" } }));
+    expect(r[0]).toMatchObject({ status: "processed", outcome: "qualified", handoff: "new" });
+    expect(store.calls[0].caller_phone).toBe("+919999900555");
+    expect(store.calls[0].answered_at).not.toBeNull();
+    expect(notifier.sent[0].text).toContain("+919999900555");
+  });
+  it("a history lookup that has no number does not erase the one we already know", async () => {
+    vi.stubEnv("VAANI_API_KEY", "k");
+    const f = fetchReturning(history([{ call_id: "inbound-sess-2", call_type: "Inbound", from_number: null, Start_time: "2026-10-09T09:10:55Z" }]));
+    const ad = createVaaniAdapter(f);
+    const ev = ad.parse(post({ call_id: "inbound-sess-2", data: { ...post().data, call_id: "inbound-sess-2" } }))[0];
+    if (ev.type !== "end_of_call_report") throw new Error();
+    const e = await ad.enrich!({ type: "end_of_call_report", report: { ...ev.report, callerPhone: "+919999900777" } });
+    if (e.type !== "end_of_call_report") throw new Error();
+    expect(e.report.callerPhone).toBe("+919999900777");
+    vi.unstubAllEnvs();
   });
 });

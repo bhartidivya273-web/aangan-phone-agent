@@ -14,6 +14,8 @@ import type { VoiceAdapter, VoiceEvent } from "./types";
 
 const Payload = z.object({
   event: z.string(),
+  room_name: z.string().optional(),
+  phone_number: z.string().optional(),
   call_id: z.string().optional(),
   timestamp: z.string().optional(),
   data: z
@@ -61,6 +63,14 @@ export function createVaaniAdapter(fetchImpl: typeof fetch = fetch): VoiceAdapte
 
     parse(body): VoiceEvent[] {
       const p = Payload.parse(body);
+      const now = new Date().toISOString();
+      // in-progress events: remember the caller's number and the pick-up time, to be joined to the end-of-call report by call id
+      if (p.event === "call_started" && p.room_name) {
+        return [{ type: "session", session: { providerCallId: p.room_name, callerPhone: p.phone_number ?? null, startedAt: now } }];
+      }
+      if (p.event === "user_picked_up_at" && p.room_name) {
+        return [{ type: "session", session: { providerCallId: p.room_name, answeredAt: now } }];
+      }
       if (p.event !== "call_postprocessing") return [{ type: "ignored", reason: `event ${p.event} is not the end-of-call event` }];
       const d = p.data ?? {};
       const id = d.call_id ?? p.call_id ?? d.room_name;
@@ -105,7 +115,7 @@ export function createVaaniAdapter(fetchImpl: typeof fetch = fetch): VoiceAdapte
               report: {
                 ...ev.report,
                 // for an inbound call the caller is the "from" number
-                callerPhone: (hit.call_type ?? "").toLowerCase().startsWith("out") ? (hit.to_number ?? null) : (hit.from_number ?? null),
+                callerPhone: ((hit.call_type ?? "").toLowerCase().startsWith("out") ? hit.to_number : hit.from_number) ?? ev.report.callerPhone,
                 startedAt: hit.Start_time ?? ev.report.startedAt,
                 endedAt: hit.End_time ?? ev.report.endedAt,
                 answeredAt: hit.user_picked_up_at ?? hit.Start_time ?? null,

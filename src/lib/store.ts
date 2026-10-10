@@ -32,6 +32,9 @@ export interface Store {
   getBookingForCall(callId: string): Promise<BookingRow | null>;
   /** Qualified calls whose HubSpot sync failed and has not succeeded since. */
   listHubspotFailures(limit: number): Promise<CallRow[]>;
+  /** Merge what we learn mid-call (never erases a value already known). */
+  upsertVoiceSession(a: { provider: string; providerCallId: string; callerPhone?: string | null; startedAt?: string | null; answeredAt?: string | null }): Promise<void>;
+  getVoiceSession(provider: string, providerCallId: string): Promise<{ callerPhone: string | null; startedAt: string | null; answeredAt: string | null } | null>;
   insertBooking(b: Omit<BookingRow, "id" | "created_at">): Promise<BookingRow>;
   findUnlinkedBookings(fromIso: string, toIso: string): Promise<BookingRow[]>;
   updateBooking(id: string, patch: Partial<BookingRow>): Promise<BookingRow>;
@@ -139,6 +142,15 @@ export class MemoryStore implements Store {
     const row: BookingRow = { id: randomUUID(), start_at: a.start, end_at: a.end, status: "booked", customer_name: a.name, customer_phone: a.phone, customer_phone_normalized: a.phoneNormalized, notes: a.notes, call_id: null, lead_id: null, created_at: new Date().toISOString() };
     this.bookings.push(row);
     return row;
+  }
+  voiceSessions = new Map<string, { callerPhone: string | null; startedAt: string | null; answeredAt: string | null }>();
+  async upsertVoiceSession(a: { provider: string; providerCallId: string; callerPhone?: string | null; startedAt?: string | null; answeredAt?: string | null }) {
+    const k = `${a.provider}:${a.providerCallId}`;
+    const cur = this.voiceSessions.get(k) ?? { callerPhone: null, startedAt: null, answeredAt: null };
+    this.voiceSessions.set(k, { callerPhone: a.callerPhone ?? cur.callerPhone, startedAt: cur.startedAt ?? a.startedAt ?? null, answeredAt: a.answeredAt ?? cur.answeredAt });
+  }
+  async getVoiceSession(provider: string, providerCallId: string) {
+    return this.voiceSessions.get(`${provider}:${providerCallId}`) ?? null;
   }
   async updateCall(id: string, patch: Partial<CallRow>) {
     const c = this.calls.find((x) => x.id === id);
@@ -334,6 +346,22 @@ export class SupabaseStore implements Store {
     const { data, error: e2 } = await this.db.from("bookings").select("*").eq("id", id as string).single();
     fail("bookSlot read", e2);
     return data as BookingRow;
+  }
+  async upsertVoiceSession(a: { provider: string; providerCallId: string; callerPhone?: string | null; startedAt?: string | null; answeredAt?: string | null }) {
+    const cur = await this.getVoiceSession(a.provider, a.providerCallId);
+    const { error } = await this.db.from("voice_sessions").upsert({
+      provider: a.provider,
+      provider_call_id: a.providerCallId,
+      caller_phone: a.callerPhone ?? cur?.callerPhone ?? null,
+      started_at: cur?.startedAt ?? a.startedAt ?? null,
+      answered_at: a.answeredAt ?? cur?.answeredAt ?? null,
+    });
+    fail("upsertVoiceSession", error);
+  }
+  async getVoiceSession(provider: string, providerCallId: string) {
+    const { data, error } = await this.db.from("voice_sessions").select("*").eq("provider", provider).eq("provider_call_id", providerCallId).maybeSingle();
+    fail("getVoiceSession", error);
+    return data ? { callerPhone: data.caller_phone as string | null, startedAt: data.started_at as string | null, answeredAt: data.answered_at as string | null } : null;
   }
   async updateCall(id: string, patch: Partial<CallRow>) {
     const { data, error } = await this.db.from("calls").update(patch).eq("id", id).select().single();

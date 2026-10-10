@@ -37,7 +37,16 @@ export interface CallLogEntry {
   providerCost?: Money | null;
 }
 
+/** Facts learned while the call is still running (e.g. Vaani's call_started carries the caller's number). */
+export interface SessionInfo {
+  providerCallId: string;
+  callerPhone?: string | null;
+  startedAt?: string | null;
+  answeredAt?: string | null;
+}
+
 export type VoiceEvent =
+  | { type: "session"; session: SessionInfo }
   | { type: "end_of_call_report"; report: EndOfCallReport }
   | { type: "call_log"; entry: CallLogEntry }
   | { type: "ignored"; reason: string };

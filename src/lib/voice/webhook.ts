@@ -34,6 +34,16 @@ export async function handleVoiceEvents(events: VoiceEvent[], provider: string, 
       out.push({ providerCallId: "", status: "ignored", detail: ev.reason });
       continue;
     }
+    if (ev.type === "session") {
+      // mid-call information: remember it for the end-of-call report; never creates a call by itself
+      try {
+        await deps.store.upsertVoiceSession({ provider, ...ev.session });
+        out.push({ providerCallId: ev.session.providerCallId, status: "logged", detail: "session info stored" });
+      } catch (e) {
+        out.push({ providerCallId: ev.session.providerCallId, status: "error", detail: (e as Error).message.slice(0, 300) });
+      }
+      continue;
+    }
     const id = ev.type === "end_of_call_report" ? ev.report.providerCallId : ev.entry.providerCallId;
     try {
       const existing = await deps.store.findCallByProviderId(provider, id);
@@ -42,9 +52,17 @@ export async function handleVoiceEvents(events: VoiceEvent[], provider: string, 
         continue;
       }
       // enrich only after the duplicate check, so a retried webhook costs no extra vendor API call
-      const full = enrich ? await enrich(ev) : ev;
-      if (full.type === "ignored") {
-        out.push({ providerCallId: id, status: "ignored", detail: full.reason });
+      let withSession = ev;
+      if (ev.type === "end_of_call_report") {
+        // what the provider told us during the call (caller number, pick-up time) fills the gaps in the end-of-call report
+        const sess = await deps.store.getVoiceSession(provider, id).catch(() => null);
+        if (sess) {
+          withSession = { type: "end_of_call_report", report: { ...ev.report, callerPhone: ev.report.callerPhone ?? sess.callerPhone, answeredAt: ev.report.answeredAt ?? sess.answeredAt } };
+        }
+      }
+      const full = enrich ? await enrich(withSession) : withSession;
+      if (full.type === "ignored" || full.type === "session") {
+        out.push({ providerCallId: id, status: "ignored", detail: full.type === "ignored" ? full.reason : "session event" });
         continue;
       }
       out.push(full.type === "end_of_call_report" ? await onReport(full.report, provider, deps) : await onLogEntry(full.entry, provider, deps));
