@@ -22,7 +22,7 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ ok: false, error: "bad body" }, { status: 400 });
   }
-  const str = (k: string) => (typeof body[k] === "string" ? (body[k] as string) : url.searchParams.get(k));
+  const str = (k: string) => (typeof body[k] === "string" ? (body[k] as string) : typeof body[k] === "number" ? String(body[k]) : url.searchParams.get(k));
   const deps = productionDeps();
   const r = await bookConsultation(
     { start: str("start") ?? "", name: str("name"), phone: str("phone"), notes: str("notes") },

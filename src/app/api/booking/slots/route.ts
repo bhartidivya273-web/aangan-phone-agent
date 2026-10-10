@@ -20,7 +20,8 @@ async function handle(req: Request, input: Record<string, unknown>) {
   if (!cfg.booking.enabled) return NextResponse.json({ ok: false, error: "booking is switched off", slots: [] });
   const get = (k: string) => {
     const v = input[k] ?? url.searchParams.get(k);
-    return typeof v === "string" && v.trim() ? v.trim() : null;
+    const t = typeof v === "number" ? String(v) : v; // tool parameters may arrive as numbers or text
+    return typeof t === "string" && t.trim() ? t.trim() : null;
   };
   const part = get("part")?.toLowerCase();
   const date = get("date");
