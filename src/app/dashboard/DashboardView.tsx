@@ -187,7 +187,7 @@ export function DashboardView({ m, demo, tz = 330, redact = false }: { m: Dashbo
         {/* 9 */}
         <section className="panel wide" aria-labelledby="p9">
           <h2 id="p9">9 · Review: declined calls</h2>
-          <div className="caption">Every declined call stays on record. Open one to read the transcript and judge whether the decline was right.</div>
+          <div className="caption">{redact ? "Every declined call stays on record. Reasons and transcripts are only visible in the private call log." : "Every declined call stays on record. Open one to read the transcript and judge whether the decline was right."}</div>
           <table>
             <thead><tr><th>When</th><th>Caller</th><th>Outcome</th><th>Reason</th><th>Flags</th></tr></thead>
             <tbody>
