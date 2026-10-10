@@ -10,22 +10,33 @@ export const maxDuration = 10; // the voice provider expects a tool answer withi
 
 /**
  * Tool for the voice assistant: next free consultation slots.
- * GET ?key=<secret>&weekdays=tuesday,thursday&part=morning|afternoon|evening&date=YYYY-MM-DD&limit=3
+ * GET  ?key=<secret>&weekdays=tuesday,thursday&part=morning|afternoon|evening&date=YYYY-MM-DD&limit=3
+ * POST same fields as a JSON or form body (how Vaani's custom tools send their parameters); secret in the `x-webhook-secret` header or `?key=`.
  */
-export async function GET(req: Request) {
+async function handle(req: Request, input: Record<string, unknown>) {
   const url = new URL(req.url);
   if (!checkSecret(req.headers, url)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   const cfg = getConfig();
   if (!cfg.booking.enabled) return NextResponse.json({ ok: false, error: "booking is switched off", slots: [] });
-  const part = url.searchParams.get("part");
-  const date = url.searchParams.get("date");
-  const limit = Math.min(6, Math.max(1, Number(url.searchParams.get("limit")) || 3));
-  const slots = await findSlots(productionDeps().store, cfg, new Date(), {
-    weekdays: parseWeekdays(url.searchParams.get("weekdays")),
-    part: part === "morning" || part === "afternoon" || part === "evening" ? part : undefined,
-    date: date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined,
-    limit,
-  }, calIfConfigured(cfg)).catch(() => null);
+  const get = (k: string) => {
+    const v = input[k] ?? url.searchParams.get(k);
+    return typeof v === "string" && v.trim() ? v.trim() : null;
+  };
+  const part = get("part")?.toLowerCase();
+  const date = get("date");
+  const limit = Math.min(6, Math.max(1, Number(get("limit")) || 3));
+  const slots = await findSlots(
+    productionDeps().store,
+    cfg,
+    new Date(),
+    {
+      weekdays: parseWeekdays(get("weekdays")),
+      part: part === "morning" || part === "afternoon" || part === "evening" ? part : undefined,
+      date: date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined,
+      limit,
+    },
+    calIfConfigured(cfg),
+  ).catch(() => null);
   if (slots === null) return NextResponse.json({ ok: false, error: "calendar unavailable", slots: [], instruction: "Say a designer will follow up to arrange a time." });
   return NextResponse.json({
     ok: true,
@@ -35,4 +46,19 @@ export async function GET(req: Request) {
       ? "Offer at most two or three of these. Read the 'say' text exactly. To book, pass the exact 'start' value."
       : "No slot matches. Say a designer will follow up to arrange a time.",
   });
+}
+
+export async function GET(req: Request) {
+  return handle(req, {});
+}
+
+export async function POST(req: Request) {
+  const raw = await req.text();
+  let body: Record<string, unknown> = {};
+  try {
+    body = raw.trim().startsWith("{") ? JSON.parse(raw) : Object.fromEntries(new URLSearchParams(raw));
+  } catch {
+    /* an unreadable body just means "no filters" */
+  }
+  return handle(req, body);
 }

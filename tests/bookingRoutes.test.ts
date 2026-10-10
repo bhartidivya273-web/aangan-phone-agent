@@ -26,6 +26,22 @@ describe("booking tool endpoints (called by the voice assistant)", () => {
     expect(j.slots[0]).toMatchObject({ say: expect.stringMatching(/^(Tuesday|Thursday), \d+ \w+ at \d+:\d\d (am|pm)$/), start: expect.stringMatching(/Z$/) });
     expect(j.consultation).toBe("phone or video call");
   });
+  it("slots also answers POST (how Vaani sends tool parameters), with the secret in a header", async () => {
+    const { POST } = await import("../src/app/api/booking/slots/route");
+    const req = (body: string, headers: Record<string, string>) => new Request("http://x/api/booking/slots", { method: "POST", headers, body });
+    const ok = await (await POST(req(JSON.stringify({ weekdays: "tuesday", part: "morning", limit: 2 }), { "content-type": "application/json", "x-webhook-secret": "bk-secret" }))).json();
+    expect(ok.ok).toBe(true);
+    expect(ok.slots).toHaveLength(2);
+    expect(ok.slots.every((s: { say: string }) => s.say.startsWith("Tuesday"))).toBe(true);
+    expect((await POST(req("{}", { "content-type": "application/json" }))).status).toBe(401);
+    expect((await (await POST(req("not json at all", { "x-webhook-secret": "bk-secret" }))).json()).ok).toBe(true); // unreadable body = no filters
+  });
+  it("book also accepts the secret in a header", async () => {
+    const { POST } = await import("../src/app/api/booking/book/route");
+    const r = await POST(new Request("http://x/api/booking/book", { method: "POST", headers: { "content-type": "application/json", "x-webhook-secret": "bk-secret" }, body: JSON.stringify({ start: "nonsense", name: "X" }) }));
+    expect(r.status).toBe(200);
+    expect((await r.json()).ok).toBe(false);
+  });
   it("book: JSON body books; the same slot again is refused with alternatives; form bodies work too", async () => {
     const { GET } = await import("../src/app/api/booking/slots/route");
     const { POST } = await import("../src/app/api/booking/book/route");
