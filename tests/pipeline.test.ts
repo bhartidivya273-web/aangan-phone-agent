@@ -152,3 +152,27 @@ describe("processCall: robustness", () => {
     expect(notifier.sent).toHaveLength(0);
   });
 });
+
+describe("processCall: qualified call whose caller number is unknown (e.g. the voice provider lookup failed)", () => {
+  it("still creates a lead and sends the designer note (phone shown as not given); nothing is lost", async () => {
+    const { d, store, notifier } = deps({ llm: fakeLLM(cls({}, { name: "Anita", phone: null })) });
+    const r = await processCall({ transcript: "AI Agent: hi. Caller: 3BHK Kothrud", callerPhone: null, ...T("2026-09-03T09:11:00Z") }, d);
+    expect(r.handoffKind).toBe("new");
+    expect(r.lead).not.toBeNull();
+    expect(r.lead!.phone_normalized).toBeNull();
+    expect(notifier.sent[0].text).toContain("Anita, not given");
+    expect(store.calls[0].lead_id).toBe(r.lead!.id);
+  });
+  it("non-qualified calls without a number still create no lead (nothing to merge on)", async () => {
+    const { d, store } = deps({ llm: fakeLLM(cls({ outcome: "other" })) });
+    const r = await processCall({ transcript: "vendor", callerPhone: null, ...T("2026-09-03T09:11:00Z") }, d);
+    expect(r.lead).toBeNull();
+    expect(store.leads.size).toBe(0);
+  });
+  it("two unknown-number qualified calls are two separate leads (they are never merged by accident)", async () => {
+    const { d, store } = deps({ llm: fakeLLM(cls({}, { name: "A" }), cls({}, { name: "B" })) });
+    await processCall({ transcript: "a", callerPhone: null, ...T("2026-09-03T09:11:00Z") }, d);
+    await processCall({ transcript: "b", callerPhone: null, ...T("2026-09-03T10:11:00Z") }, d);
+    expect(store.leads.size).toBe(2);
+  });
+});

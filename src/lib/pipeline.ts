@@ -123,12 +123,12 @@ export async function processCall(input: ProcessCallInput, deps: ProcessDeps): P
   const effective: Outcome | null = cls ? (cls.outcome === "repeat_caller" ? cls.underlying_outcome ?? null : cls.outcome) : null;
   const extracted: Partial<Extracted> = cls?.extracted ?? { ...EMPTY_EXTRACTED };
 
-  // --- lead (merge by caller ID) ---
-  if (phoneNorm) {
+  // --- lead (merge by caller ID). A qualified call with NO caller id still gets a lead (without a phone key), so it is never lost. ---
+  if (phoneNorm || effective === "qualified") {
     const merged = mergeFields(lead?.fields ?? {}, { ...extracted, phone: extracted.phone ?? input.callerPhone });
     lead = await store.saveLead({
       ...(lead ?? { first_call_at: input.startedAt, flags: [], status: "open" as LeadStatus }),
-      phone_normalized: phoneNorm,
+      phone_normalized: phoneNorm ?? null,
       name: (merged.name as string | null | undefined) ?? lead?.name ?? null,
       fields: merged,
       status: nextStatus(lead?.status ?? null, effective),
