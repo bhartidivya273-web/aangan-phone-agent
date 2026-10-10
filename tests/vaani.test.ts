@@ -3,7 +3,7 @@ import { processCall } from "../src/lib/pipeline";
 import { agentPriceLeaks } from "../src/lib/priceFilter";
 import { loadRules } from "../src/lib/rules";
 import { buildVaaniPrompt } from "../src/lib/vaaniPrompt";
-import { createVaaniAdapter, normalizeVaaniTranscript } from "../src/lib/voice/vaani";
+import { createVaaniAdapter, durationFromTranscript, normalizeVaaniTranscript } from "../src/lib/voice/vaani";
 import { handleVoiceEvents } from "../src/lib/voice/webhook";
 import { cfg, cls, deps, fakeLLM, rules } from "./helpers";
 
@@ -214,5 +214,23 @@ describe("caller number from in-progress events (Vaani's call-history API is unr
     if (e.type !== "end_of_call_report") throw new Error();
     expect(e.report.callerPhone).toBe("+919999900777");
     vi.unstubAllEnvs();
+  });
+});
+
+describe("duration when the provider sends none (seen on Vaani's browser test calls)", () => {
+  it("is taken from the transcript timestamps", () => {
+    expect(durationFromTranscript("[22:57:10] AGENT: hi [22:57:40] USER: hello [22:59:25] AGENT: bye")).toBe(135);
+    expect(durationFromTranscript("[23:59:30] AGENT: hi [00:00:30] USER: bye")).toBe(60); // midnight wrap
+    expect(durationFromTranscript("AGENT: no stamps at all")).toBeNull();
+    expect(durationFromTranscript("[10:00:00] AGENT: only one")).toBeNull();
+  });
+  it("call_duration 0 or missing falls back to it; a real call_duration still wins", () => {
+    const a = createVaaniAdapter();
+    const tr = "[10:00:00] AGENT: hi [10:02:00] USER: bye";
+    const rep = (cd?: number) => { const e = a.parse(post({ data: { ...post().data, call_duration: cd, transcript: tr } }))[0]; if (e.type !== "end_of_call_report") throw new Error(); return e.report; };
+    expect(rep(0).durationSec).toBe(120);
+    expect(rep(undefined).durationSec).toBe(120);
+    expect(rep(300000).durationSec).toBe(300);
+    expect(rep(0).startedAt).toBe("2026-10-09T09:14:00.000Z"); // end 09:16 minus 120 s
   });
 });

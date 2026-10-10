@@ -30,6 +30,15 @@ const Payload = z.object({
     .optional(),
 });
 
+/** Duration from the transcript's own "[hh:mm:ss]" markers (last minus first), for when the provider's call_duration is missing or 0. Handles a midnight wrap. */
+export function durationFromTranscript(t: string): number | null {
+  const stamps = [...t.matchAll(/\[(\d{1,2}):(\d{2})(?::(\d{2}))?\]/g)].map((m) => Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3] ?? 0));
+  if (stamps.length < 2) return null;
+  let d = stamps[stamps.length - 1] - stamps[0];
+  if (d < 0) d += 86_400;
+  return d > 0 && d < 4 * 3600 ? d : null;
+}
+
 /** "[13:33:14] AGENT: hi [13:34:00] USER: hello" (or "AGENT: ..\n\n USER: ..") -> "AI Agent: hi Caller: hello". */
 export function normalizeVaaniTranscript(t: string): string {
   return t
@@ -75,7 +84,10 @@ export function createVaaniAdapter(fetchImpl: typeof fetch = fetch): VoiceAdapte
       const d = p.data ?? {};
       const id = d.call_id ?? p.call_id ?? d.room_name;
       if (!id) throw new Error("call_postprocessing without a call id");
-      const durationSec = d.call_duration != null ? Math.round(d.call_duration / 1000) : null;
+      // diagnostics for the first real calls: what does this provider actually send?
+      console.info("[vaani] call_postprocessing", JSON.stringify({ id: p.call_id ?? d.call_id, dataKeys: Object.keys(d), call_duration: d.call_duration, topKeys: Object.keys(body as object) }));
+      const fromMs = d.call_duration != null && d.call_duration > 0 ? Math.round(d.call_duration / 1000) : null;
+      const durationSec = fromMs ?? (d.transcript ? durationFromTranscript(d.transcript) : null);
       const ended = p.timestamp && !Number.isNaN(Date.parse(p.timestamp)) ? new Date(p.timestamp) : new Date();
       const started = new Date(ended.getTime() - (durationSec ?? 0) * 1000);
       return [
