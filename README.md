@@ -4,7 +4,7 @@ A Pune interior-design studio gets ~200 enquiries a month and replies to fewer t
 against the founder's rubric, books a consultation, and puts the lead in front of the people who need it. **The agent never quotes a price**
 (enforced in code, not just in the prompt).
 
-**Live dashboard:** https://aangan-phone-agent-wine.vercel.app/dashboard (public view: no names, phone numbers or transcripts)
+**Live dashboard (auto-deployed from this repo by Vercel):** https://aangan-phone-agent-wine.vercel.app/dashboard (public view: no names, phone numbers or transcripts)
 
 ## The flow
 
