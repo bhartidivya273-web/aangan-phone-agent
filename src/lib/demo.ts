@@ -160,7 +160,8 @@ export function generateDemoData(now: Date, cfg: Config, opts: { days?: number; 
             id: randomUUID(), lead_id: lead.id, call_id: id, kind: existing ? "updated" : "new", status: "sent",
             telegram_chat_id: "DEMO", telegram_message_id: handoffs.length + 1, note_text: "NEW LEAD (demo)", sent_at: sent.toISOString(),
             due_at: due.toISOString(), claimed_by: claimedAt ? pick(["Designer A", "Designer B", "Designer C"]) : null,
-            claimed_at: claimedAt ? iso(claimedAt) : null, unclaimed_alert_sent_at: null, error: null,
+            // demo leads must never raise a real "unclaimed lead" alert to Nikhil, so unclaimed ones are marked as already alerted
+            claimed_at: claimedAt ? iso(claimedAt) : null, unclaimed_alert_sent_at: claimedAt ? null : iso(now.getTime()), error: null,
             first_contact_at: firstContact ? iso(firstContact) : null, fit_verdict: fit as "good" | "poor" | null,
           });
           if (fit === "good" && r() < 0.55) {
@@ -175,7 +176,7 @@ export function generateDemoData(now: Date, cfg: Config, opts: { days?: number; 
         handoffs.push({
           id: randomUUID(), lead_id: lead.id, call_id: id, kind: "escalation", status: "sent", telegram_chat_id: "DEMO",
           telegram_message_id: handoffs.length + 1, note_text: "ESCALATION (demo)", sent_at: iso(sentMs), due_at: due.toISOString(),
-          claimed_by: null, claimed_at: null, unclaimed_alert_sent_at: null, error: null,
+          claimed_by: null, claimed_at: null, unclaimed_alert_sent_at: iso(now.getTime()), error: null,
           first_contact_at: back && back < now.getTime() ? iso(back) : null, fit_verdict: null,
         });
       }

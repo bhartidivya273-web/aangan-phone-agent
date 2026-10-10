@@ -57,7 +57,7 @@ export function DashboardView({ m, demo, tz = 330, redact = false }: { m: Dashbo
       </div>
 
       {redact && !demo && <div className="banner">Public view: no names, phone numbers, transcripts or call reasons are shown here. They stay in the private call log, Telegram and HubSpot.</div>}
-      {demo && <div className="banner"><b>DEMO DATA.</b> These calls, names and amounts are synthetic, generated for layout and testing. Nothing here is real Aangan data.</div>}
+      {demo && <div className="banner"><b>DEMO DATA.</b> Some or all of the calls and amounts shown here are synthetic, generated for layout and testing. They are not real Aangan customers.</div>}
 
       <div className="grid">
         {/* 1 */}

@@ -22,6 +22,11 @@ describe("demo data", () => {
     const costed = new Set(d.costs.map((c) => c.call_id));
     expect(d.calls.every((c) => costed.has(c.id))).toBe(true);
   });
+  it("synthetic unclaimed leads are pre-marked as alerted so the unclaimed-lead cron can never message Nikhil about them", () => {
+    const unclaimed = d.handoffs.filter((h) => !h.claimed_at);
+    expect(unclaimed.length).toBeGreaterThan(0);
+    expect(unclaimed.every((h) => !!h.unclaimed_alert_sent_at)).toBe(true);
+  });
   it("covers all outcomes, front-desk calls, escalations and declined calls so every panel has content", () => {
     const outs = new Set(d.calls.map((c) => c.outcome));
     for (const o of ["qualified", "not_a_fit", "escalate", "dropped_or_missed", "existing_client"]) expect(outs.has(o as never)).toBe(true);

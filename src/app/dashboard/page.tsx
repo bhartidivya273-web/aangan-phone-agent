@@ -10,7 +10,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   try {
     const src = getDashboardSource();
     const data = await src.store.listAll(new Date(src.now.getTime() - days * 86_400_000).toISOString());
-    return <DashboardView m={computeDashboard(data, cfg, src.now, days)} demo={src.demo} tz={cfg.tzOffsetMinutes} redact={isPublicView()} />;
+    return <DashboardView m={computeDashboard(data, cfg, src.now, days)} demo={src.demo || data.calls.some((c) => c.provider === "demo")} tz={cfg.tzOffsetMinutes} redact={isPublicView()} />;
   } catch (e) {
     return (
       <div className="wrap">
