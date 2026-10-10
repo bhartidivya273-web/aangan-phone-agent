@@ -1,0 +1,10 @@
+.tools
+.next
+out
+node_modules
+docs
+data
+.env
+.env.*
+.claude
+tsconfig.tsbuildinfo

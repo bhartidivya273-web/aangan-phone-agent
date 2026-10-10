@@ -1,0 +1,23 @@
+node_modules
+.next
+.tools
+.env
+.env.local
+.env.*.local
+out
+*.tsbuildinfo
+next-env.d.ts
+.vercel
+.DS_Store
+.env*
+supabase/*.local.sql
+vaani/*.local.txt
+
+# keep out of the public repository
+*.pdf
+data/all_enquiries_clean.txt
+context/pricing.private.md
+CLAUDE_CODE_PROMPT.md
+vaani/*.local.txt
+supabase/*.local.sql
+.claude
